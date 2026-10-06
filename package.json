@@ -1,0 +1,13 @@
+{
+  "name": "recipe-book",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A shared, book-style recipe app. Static front end in /public, sync via a Netlify Function + Netlify Blobs.",
+  "scripts": {
+    "dev": "netlify dev"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^10.0.0"
+  }
+}

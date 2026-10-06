@@ -1,0 +1,23 @@
+# Recipe Book
+
+A shared, book-style recipe app for your phone.
+
+- Looks and turns like a real book — drag a page, tap the folded corner, or use the arrows
+- Share a 6-letter book code (or invite link) and everyone's recipes sync automatically
+- Recipes in metric, ingredients with quantities, method below, and 1× / 2× / 4× scaling
+- Categories with coloured tabs, a contents page, and name search that flips straight to the recipe
+- Built-in kitchen timer, plus tap-to-start timers on any time in a method ("bake 25 min")
+- Installable to your home screen
+
+## How it works
+
+- `public/` — the app (plain HTML/CSS/JS, no build step)
+- `netlify/functions/book.mjs` — the sync API at `/api/book`, storing each book in Netlify Blobs
+- Phones poll the API every few seconds; any change bumps the book's version so others pick it up
+
+## Run locally
+
+```
+npm install
+npx netlify dev
+```

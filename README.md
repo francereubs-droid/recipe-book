@@ -12,13 +12,18 @@ A shared, book-style recipe app for your phone.
 
 ## How it works
 
+Hosted on **Cloudflare Pages** (free).
+
 - `public/` — the app (plain HTML/CSS/JS, no build step)
-- `netlify/functions/book.mjs` — the sync API at `/api/book`, storing each book in Netlify Blobs
+- `functions/api/book.js` — the sync API at `/api/book`, storing books in a Cloudflare D1 database
 - Phones poll the API every few seconds; any change bumps the book's version so others pick it up
 
-## Run locally
+## Cloudflare setup
 
-```
-npm install
-npx netlify dev
-```
+1. Workers & Pages → Create → Pages → Connect to Git → pick this repo
+2. Build command: *(none)* · Build output directory: `public`
+3. Storage & Databases → D1 → Create database (e.g. `recipe-book-db`)
+4. Pages project → Settings → Bindings → Add → D1 database: variable name `DB` → pick the database
+5. Deployments → Retry/redeploy so the binding takes effect
+
+The tables are created automatically on first use.

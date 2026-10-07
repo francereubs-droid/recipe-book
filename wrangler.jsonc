@@ -1,0 +1,17 @@
+{
+  // Cloudflare Worker config. Deployed automatically by Workers Builds
+  // (npx wrangler deploy) on every push to main.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "recipe-book",
+  "main": "src/worker.js",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./public",
+    "not_found_handling": "none"
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "BOOKS", "class_name": "BookStore" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["BookStore"] }],
+  "observability": { "enabled": true }
+}

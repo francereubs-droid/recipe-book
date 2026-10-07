@@ -12,18 +12,14 @@ A shared, book-style recipe app for your phone.
 
 ## How it works
 
-Hosted on **Cloudflare Pages** (free).
+Hosted free as a **Cloudflare Worker** with static assets.
 
-- `public/` — the app (plain HTML/CSS/JS, no build step)
-- `functions/api/book.js` — the sync API at `/api/book`, storing books in a Cloudflare D1 database
+- `public/` — the app (plain HTML/CSS/JS, no build step), served as static assets
+- `src/worker.js` — the sync API at `/api/book`; books are stored in a SQLite-backed Durable Object
+- `wrangler.jsonc` — Worker config (name, assets folder, Durable Object binding)
 - Phones poll the API every few seconds; any change bumps the book's version so others pick it up
 
-## Cloudflare setup
+## Deploying
 
-1. Workers & Pages → Create → Pages → Connect to Git → pick this repo
-2. Build command: *(none)* · Build output directory: `public`
-3. Storage & Databases → D1 → Create database (e.g. `recipe-book-db`)
-4. Pages project → Settings → Bindings → Add → D1 database: variable name `DB` → pick the database
-5. Deployments → Retry/redeploy so the binding takes effect
-
-The tables are created automatically on first use.
+The Worker is connected to this repo with Workers Builds, so every push to `main`
+runs `npx wrangler deploy` automatically. No database setup is needed.

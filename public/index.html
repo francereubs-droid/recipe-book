@@ -4,43 +4,43 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <title>Recipe Book</title>
-  <meta name="theme-color" content="#2a1a12">
+  <meta name="theme-color" content="#f6f3ee">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Recipes">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,800;1,9..144,400&family=Lora:ital,wght@0,400;0,600;1,400&family=Caveat:wght@500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Serif+Display&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <!-- Welcome / choose a book -->
   <section id="welcome" class="welcome" hidden>
-    <div class="closed-book">
-      <div class="closed-book__cover">
-        <div class="emboss-frame">
-          <p class="cover-kicker">— est. in our kitchen —</p>
-          <h1 class="cover-title">Recipe<br>Book</h1>
-          <svg class="cover-ornament" viewBox="0 0 120 24" aria-hidden="true"><path d="M2 12h44M74 12h44" stroke="currentColor" stroke-width="1.5"/><circle cx="60" cy="12" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="60" cy="12" r="2" fill="currentColor"/></svg>
-        </div>
+    <div class="hero-book" aria-hidden="true">
+      <div class="hero-book__cover">
+        <span class="hero-book__title">Recipe<br>Book</span>
       </div>
     </div>
+    <h1 class="welcome__title">Your shared recipe book</h1>
+    <p class="welcome__sub">Cook from the same book as your family and friends. Anything you add shows up for everyone straight away.</p>
+
     <div class="welcome-panel">
+      <div class="seg seg--full" role="tablist">
+        <button class="is-on" data-action="welcome-tab" data-tab="create" role="tab">New book</button>
+        <button data-action="welcome-tab" data-tab="join" role="tab">Join with a code</button>
+      </div>
       <form id="createForm" class="card-form">
-        <h2>Start a new book</h2>
-        <label>Book name<input name="name" maxlength="60" placeholder="e.g. The France Family Kitchen" required></label>
-        <label>Your name <span class="hint">(shown on recipes you add)</span><input name="who" maxlength="40" placeholder="e.g. Reuben"></label>
-        <button class="btn btn--primary" type="submit">Create book</button>
+        <label>Book name<input name="name" maxlength="60" placeholder="e.g. Family Favourites" required></label>
+        <label>Your name<input name="who" maxlength="40" placeholder="e.g. Reuben"></label>
+        <button class="btn btn--primary btn--wide" type="submit">Create book</button>
       </form>
-      <div class="or"><span>or</span></div>
-      <form id="joinForm" class="card-form">
-        <h2>Open a shared book</h2>
-        <label>Book code<input name="code" maxlength="6" placeholder="ABC123" autocapitalize="characters" autocomplete="off" required></label>
+      <form id="joinForm" class="card-form" hidden>
+        <label>Book code<input name="code" maxlength="6" placeholder="ABC123" autocapitalize="characters" autocomplete="off" required class="code-input"></label>
         <label>Your name<input name="who" maxlength="40" placeholder="e.g. Sam"></label>
-        <button class="btn" type="submit">Open book</button>
+        <button class="btn btn--primary btn--wide" type="submit">Open book</button>
       </form>
       <p class="welcome-error" id="welcomeError" role="alert"></p>
     </div>
@@ -49,44 +49,55 @@
   <!-- The book -->
   <section id="app" class="app" hidden>
     <header class="topbar">
-      <button class="icon-btn" data-action="menu" aria-label="Menu">
-        <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
-      </button>
-      <div class="topbar__title">
+      <button class="topbar__title" data-action="menu" aria-label="Book settings">
         <span id="bookName">Recipe Book</span>
-        <span class="sync" id="sync" title="Synced"><i></i><b id="syncText">Synced</b></span>
-      </div>
-      <button class="icon-btn" data-action="search" aria-label="Search recipes">
-        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+        <span class="sync" id="sync"><i></i><b id="syncText">Synced</b></span>
       </button>
-      <button class="icon-btn icon-btn--accent" data-action="add" aria-label="Add recipe">
-        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+      <button class="share-btn" data-action="menu">
+        <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><path d="M18 8v6M15 11h6"/></svg>
+        Share
       </button>
     </header>
+
+    <nav class="cats" id="cats" aria-label="Categories"></nav>
 
     <main class="desk">
       <div class="book" id="book">
         <div class="book__edge" aria-hidden="true"></div>
-        <div class="tabs" id="tabs"></div>
         <div class="stage" id="stage">
           <div class="page" id="current"></div>
         </div>
       </div>
     </main>
 
-    <footer class="pager">
+    <div class="pager">
       <button class="pager__btn" data-action="prev" aria-label="Previous page">
         <svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg>
       </button>
       <span class="pager__num" id="pageNum">1 / 1</span>
-      <button class="timer-pill" id="timerPill" data-action="timers" aria-label="Timers">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="7.5"/><path d="M12 9v4l2.5 2M9.5 2.5h5"/></svg>
-        <span id="timerPillText">Timer</span>
-      </button>
       <button class="pager__btn" data-action="next" aria-label="Next page">
         <svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg>
       </button>
-    </footer>
+    </div>
+
+    <nav class="tabbar" aria-label="Main">
+      <button class="tabbar__btn" data-action="goto" data-key="contents">
+        <svg viewBox="0 0 24 24"><path d="M5 4.5h11a3 3 0 0 1 3 3V20H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11M9 8.5h6"/></svg>
+        <span>Contents</span>
+      </button>
+      <button class="tabbar__btn" data-action="search">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+        <span>Search</span>
+      </button>
+      <button class="tabbar__add" data-action="add" aria-label="Add a recipe">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        <span>Add</span>
+      </button>
+      <button class="tabbar__btn" id="timerBtn" data-action="timers">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="7.5"/><path d="M12 9v4l2.5 2M9.5 2.5h5"/></svg>
+        <span id="timerBtnText">Timer</span>
+      </button>
+    </nav>
   </section>
 
   <!-- Sheets -->
@@ -96,90 +107,99 @@
     <div class="sheet__grab"></div>
     <div class="search-box">
       <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
-      <input id="searchInput" type="search" placeholder="Search recipes by name…" autocomplete="off" enterkeyhint="search">
+      <input id="searchInput" type="search" placeholder="Find a recipe…" autocomplete="off" enterkeyhint="search">
     </div>
     <ul class="results" id="results"></ul>
   </section>
 
   <section class="sheet sheet--tall" id="editSheet" hidden aria-label="Edit recipe">
-    <div class="sheet__grab"></div>
     <form id="editForm" class="edit-form" autocomplete="off">
       <div class="sheet__head">
         <button type="button" class="link-btn" data-action="close">Cancel</button>
         <h2 id="editTitle">New recipe</h2>
         <button type="submit" class="link-btn link-btn--bold">Save</button>
       </div>
-      <label>Recipe name<input name="name" maxlength="120" required placeholder="e.g. Grandma's Lemon Loaf"></label>
-      <label>Category
-        <select name="category" id="categorySelect"></select>
+
+      <label class="big-label">Name
+        <input name="name" maxlength="120" required placeholder="e.g. Lemon Loaf" class="input-lg">
       </label>
-      <label id="newCatWrap" hidden>New category name<input name="newCategory" maxlength="40" placeholder="e.g. Christmas"></label>
+
+      <div class="field">
+        <span class="field__label">Category</span>
+        <div class="chip-pick" id="catPick"></div>
+        <input name="newCategory" id="newCatInput" maxlength="40" placeholder="New category name" hidden>
+      </div>
+
       <div class="row3">
         <label>Serves<input name="serves" type="number" inputmode="numeric" min="0" step="1" placeholder="4"></label>
         <label>Prep (min)<input name="prep" type="number" inputmode="numeric" min="0" step="1" placeholder="15"></label>
         <label>Cook (min)<input name="cook" type="number" inputmode="numeric" min="0" step="1" placeholder="30"></label>
       </div>
-      <fieldset>
-        <legend>Ingredients <span class="hint">(metric)</span></legend>
-        <div id="ingRows" class="ing-rows"></div>
-        <button type="button" class="btn btn--small" data-action="add-ing">+ Add ingredient</button>
-      </fieldset>
-      <label>Method <span class="hint">— one step per line. Times like “25 min” become tap-to-start timers.</span>
-        <textarea name="method" rows="8" placeholder="Preheat oven to 180°C.&#10;Cream the butter and sugar.&#10;Bake for 25 min until golden."></textarea>
+
+      <label>Ingredients
+        <span class="hint">One per line, amount first — e.g. <b>200 g flour</b>, <b>2 eggs</b>, <b>1 tsp salt</b></span>
+        <textarea name="ingredients" rows="7" placeholder="250 g plain flour&#10;2 tsp baking powder&#10;2 eggs&#10;300 ml milk&#10;salt, to taste"></textarea>
       </label>
+
+      <label>Method
+        <span class="hint">One step per line. Times like “25 min” become tap-to-start timers.</span>
+        <textarea name="method" rows="7" placeholder="Preheat the oven to 180°C.&#10;Mix the dry ingredients.&#10;Bake for 25 min until golden."></textarea>
+      </label>
+
       <label>Notes <span class="hint">(optional)</span><textarea name="notes" rows="2" maxlength="2000" placeholder="Tips, where it came from…"></textarea></label>
-      <button type="button" class="btn btn--danger" id="deleteBtn" data-action="delete" hidden>Delete this recipe</button>
+
+      <button type="submit" class="btn btn--primary btn--wide">Save recipe</button>
+      <button type="button" class="btn btn--ghost-danger btn--wide" id="deleteBtn" data-action="delete" hidden>Delete recipe</button>
     </form>
   </section>
 
-  <section class="sheet" id="menuSheet" hidden aria-label="Book menu">
+  <section class="sheet" id="menuSheet" hidden aria-label="Share and settings">
     <div class="sheet__grab"></div>
     <div class="menu">
-      <p class="menu__label">Share this book</p>
+      <h2 class="menu__title">Share this book</h2>
+      <p class="menu__hint">Anyone with the code can open the book and add recipes. Changes sync to everyone automatically.</p>
       <div class="share-code" id="shareCode">——————</div>
-      <p class="menu__hint">Anyone with this code can open and add to the book. Changes show up on everyone's phone automatically.</p>
       <div class="menu__row">
         <button class="btn btn--primary" data-action="share">Send invite</button>
         <button class="btn" data-action="copy-code">Copy code</button>
       </div>
-      <hr>
-      <button class="menu__item" data-action="rename">Rename book</button>
-      <button class="menu__item" data-action="set-name">Change my name <span id="whoLabel" class="hint"></span></button>
-      <div id="bookList"></div>
-      <button class="menu__item" data-action="new-book">Start or open another book</button>
+      <div class="menu__list">
+        <button class="menu__item" data-action="rename"><span>Rename book</span><svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg></button>
+        <button class="menu__item" data-action="set-name"><span>Your name <span id="whoLabel" class="hint"></span></span><svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg></button>
+        <div id="bookList"></div>
+        <button class="menu__item" data-action="new-book"><span>Start or join another book</span><svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg></button>
+      </div>
     </div>
   </section>
 
-  <section class="sheet" id="timerSheet" hidden aria-label="Kitchen timers">
+  <section class="sheet" id="timerSheet" hidden aria-label="Kitchen timer">
     <div class="sheet__grab"></div>
     <div class="timer-panel">
-      <h2>Kitchen timer</h2>
+      <h2 class="menu__title">Timer</h2>
       <div class="setter">
         <button class="round-btn" data-action="t-adj" data-d="-60" aria-label="Minus 1 minute">−</button>
         <div class="setter__display" id="setterDisplay">05:00</div>
         <button class="round-btn" data-action="t-adj" data-d="60" aria-label="Plus 1 minute">+</button>
       </div>
-      <div class="chips" id="presetChips">
-        <button class="chip" data-action="t-set" data-s="60">1m</button>
-        <button class="chip" data-action="t-set" data-s="180">3m</button>
-        <button class="chip" data-action="t-set" data-s="300">5m</button>
-        <button class="chip" data-action="t-set" data-s="600">10m</button>
-        <button class="chip" data-action="t-set" data-s="900">15m</button>
-        <button class="chip" data-action="t-set" data-s="1200">20m</button>
-        <button class="chip" data-action="t-set" data-s="1800">30m</button>
-        <button class="chip" data-action="t-set" data-s="2700">45m</button>
-        <button class="chip" data-action="t-set" data-s="3600">1h</button>
-        <button class="chip chip--ghost" data-action="t-adj" data-d="10">+10s</button>
+      <div class="chips">
+        <button class="chip" data-action="t-set" data-s="60">1 min</button>
+        <button class="chip" data-action="t-set" data-s="300">5 min</button>
+        <button class="chip" data-action="t-set" data-s="600">10 min</button>
+        <button class="chip" data-action="t-set" data-s="900">15 min</button>
+        <button class="chip" data-action="t-set" data-s="1800">30 min</button>
+        <button class="chip" data-action="t-set" data-s="3600">1 hr</button>
       </div>
-      <input id="timerLabel" class="timer-label" maxlength="40" placeholder="Label (e.g. Bread in oven)">
-      <button class="btn btn--primary btn--wide" data-action="t-start">Start timer</button>
+      <input id="timerLabel" class="timer-label" maxlength="40" placeholder="What's it for? (optional)">
+      <button class="btn btn--primary btn--wide" data-action="t-start">Start</button>
       <ul class="timer-list" id="timerList"></ul>
-      <p class="menu__hint">Keep the app open for the alarm to ring. The screen stays on while a timer runs.</p>
+      <p class="menu__hint center">Keep the app open for the alarm to ring.</p>
     </div>
   </section>
 
   <div class="alarm" id="alarm" hidden role="alertdialog" aria-live="assertive">
-    <div class="alarm__bell">⏰</div>
+    <div class="alarm__bell">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="7.5"/><path d="M12 9v4l2.5 2M9.5 2.5h5"/></svg>
+    </div>
     <div class="alarm__text"><strong id="alarmTitle">Time's up!</strong><span id="alarmSub"></span></div>
     <button class="btn btn--primary" data-action="alarm-stop">Stop</button>
   </div>

@@ -24,20 +24,26 @@
   }
 
   const DEFAULT_CATS = ["Breakfast", "Mains", "Soups", "Sides & Salads", "Baking", "Desserts", "Snacks", "Drinks"];
-  const TAB_COLORS = ["#4f6b3a", "#a23b24", "#2f5d73", "#b07a1f", "#6d3b6b", "#3f6e5f", "#8a4b2a", "#4a4f8a", "#7a6a2a", "#8a2f4f"];
-  const UNITS = ["g", "kg", "ml", "L", "tsp", "tbsp", "cup", "whole", "pinch", "to taste"];
+  // [text colour, soft background] per category
+  const CAT_COLORS = [
+    ["#3f7a3a", "#e4f0df"], ["#c0532f", "#fde6dc"], ["#2e6a8e", "#ddedf6"], ["#a8700f", "#fcf0d6"],
+    ["#8a4688", "#f3e3f2"], ["#2c7566", "#dcf1ec"], ["#a0582a", "#f8e6d8"], ["#4b52a0", "#e4e6f8"],
+  ];
 
-  function catColor(cat) {
+  function catPair(cat) {
     const i = DEFAULT_CATS.indexOf(cat);
-    if (i >= 0) return TAB_COLORS[i];
+    if (i >= 0) return CAT_COLORS[i % CAT_COLORS.length];
     let h = 0;
     for (const c of cat) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-    return TAB_COLORS[h % TAB_COLORS.length];
+    return CAT_COLORS[h % CAT_COLORS.length];
   }
+  const catColor = (cat) => catPair(cat)[0];
+  const catStyle = (cat) => { const [fg, bg] = catPair(cat); return `--tab:${fg};--tab-bg:${bg}`; };
 
-  const ORNAMENT = `<svg class="ornament" viewBox="0 0 120 18" aria-hidden="true"><path d="M2 9h44M74 9h44" stroke="currentColor" stroke-width="1.2"/><path d="M60 3l6 6-6 6-6-6z" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>`;
   const CLOCK = `<svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="7.5"/><path d="M12 9v4l2.5 2"/></svg>`;
   const PENCIL = `<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></svg>`;
+  const CHEV = `<svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg>`;
+  const PEOPLE = `<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5M16 5.5a3 3 0 0 1 0 5.6M18 14c1.6.6 2.6 2.2 3 4.5"/></svg>`;
 
   // ---------- state ----------
   const state = {
@@ -78,7 +84,55 @@
     else if (u === "g" || u === "ml") str = q >= 10 ? String(Math.round(q)) : trim0(q.toFixed(1));
     else str = trim0(q >= 100 ? q.toFixed(0) : q >= 10 ? q.toFixed(1) : q.toFixed(2));
     if (u === "pinch" && q > 1) u = "pinches";
+    if (u === "cup" && q > 1) u = "cups";
     return u && u !== "whole" ? `${str} ${u}` : str;
+  }
+
+  // "200 g plain flour" ⇄ { qty: 200, unit: "g", name: "plain flour" }
+  const UNIT_ALIASES = {
+    g: "g", gram: "g", grams: "g", gm: "g", gms: "g",
+    kg: "kg", kgs: "kg", kilo: "kg", kilos: "kg", kilogram: "kg", kilograms: "kg",
+    ml: "ml", millilitre: "ml", millilitres: "ml", milliliter: "ml", milliliters: "ml",
+    l: "L", litre: "L", litres: "L", liter: "L", liters: "L",
+    tsp: "tsp", tsps: "tsp", teaspoon: "tsp", teaspoons: "tsp",
+    tbsp: "tbsp", tbsps: "tbsp", tablespoon: "tbsp", tablespoons: "tbsp", tbs: "tbsp",
+    cup: "cup", cups: "cup", pinch: "pinch", pinches: "pinch",
+  };
+  const VULGAR = { "¼": 0.25, "½": 0.5, "¾": 0.75, "⅓": 1 / 3, "⅔": 2 / 3, "⅛": 0.125 };
+  function parseQty(s) {
+    s = s.trim().replace(",", ".");
+    let m = s.match(/^(\d+)?\s*([¼½¾⅓⅔⅛])$/);
+    if (m) return (+m[1] || 0) + VULGAR[m[2]];
+    m = s.match(/^(?:(\d+)\s+)?(\d+)\/(\d+)$/);
+    if (m) return (+m[1] || 0) + +m[2] / +m[3];
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : null;
+  }
+  function parseIngredient(line) {
+    let text = line.trim().replace(/^[-•*]\s*/, "");
+    if (!text) return null;
+    const taste = text.match(/^(.*?)[,\s]+to taste$/i);
+    if (taste) return { qty: null, unit: "to taste", name: taste[1].trim() };
+    const m = text.match(/^((?:\d+\s+)?\d+\/\d+|\d*\s*[¼½¾⅓⅔⅛]|\d+(?:[.,]\d+)?)\s*(.*)$/);
+    if (!m) {
+      const p = text.match(/^(?:a\s+)?pinch(?:\s+of)?\s+(.+)$/i);
+      return p ? { qty: 1, unit: "pinch", name: p[1] } : { qty: null, unit: "whole", name: text };
+    }
+    const qty = parseQty(m[1]);
+    let rest = m[2];
+    const um = rest.match(/^([a-zA-Z]+)\.?(?:\s+of)?\s+(.+)$/) || rest.match(/^([a-zA-Z]+)$/);
+    let unit = "whole";
+    if (um && UNIT_ALIASES[um[1].toLowerCase()]) {
+      unit = UNIT_ALIASES[um[1].toLowerCase()];
+      rest = um[2] || "";
+    }
+    return { qty, unit, name: rest.trim() || text };
+  }
+  function formatIngredient(g) {
+    if (g.unit === "to taste") return `${g.name}, to taste`;
+    if (g.qty == null) return g.name;
+    const q = trim0(String(Math.round(g.qty * 1000) / 1000));
+    return g.unit && g.unit !== "whole" ? `${q} ${g.unit} ${g.name}` : `${q} ${g.name}`;
   }
 
   // Turn "bake 20–25 minutes" into a tap-to-start timer chip.
@@ -126,59 +180,63 @@
   const pageIndex = (key) => state.pages.findIndex((p) => p.key === key);
   const recipeById = (id) => state.recipes.find((r) => r.id === id);
 
+  const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+
   function pageHTML(p, i) {
     switch (p.type) {
       case "cover":
-        return `<div class="emboss-frame">
-            <p class="cover-kicker">— our family recipes —</p>
+        return `<div>
+            <p class="cover-kicker">Recipe book</p>
+          </div>
+          <div>
             <h1 class="cover-title">${esc(state.name || "Recipe Book")}</h1>
-            <svg class="cover-ornament" viewBox="0 0 120 24" aria-hidden="true"><path d="M2 12h44M74 12h44" stroke="currentColor" stroke-width="1.5"/><circle cx="60" cy="12" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="60" cy="12" r="2" fill="currentColor"/></svg>
-            <p class="cover-meta">${state.recipes.length} recipe${state.recipes.length === 1 ? "" : "s"}</p>
-            <p class="cover-hint">swipe to open ←</p>
-          </div>`;
+            <p class="cover-meta">${plural(state.recipes.length, "recipe")}</p>
+          </div>
+          <button class="cover-open" data-action="next">Open the book ${CHEV}</button>`;
       case "contents": {
         const cats = categories();
-        if (!cats.length) return `<p class="p-kicker">Table of</p><h2 class="p-title">Contents</h2>${ORNAMENT}<p class="toc__empty">No recipes yet — tap + to write the first one!</p>`;
-        return `<p class="p-kicker">Table of</p><h2 class="p-title">Contents</h2>${ORNAMENT}
+        if (!cats.length) return `<h2 class="p-head">Contents</h2>
+          <div class="empty-state"><p>No recipes yet.<br>Add the first one and it'll appear here.</p>
+          <button class="btn btn--primary" data-action="add">+ Add a recipe</button></div>`;
+        return `<h2 class="p-head">Contents</h2>
           <ul class="toc">${cats.map((c) => `
-            <li><button class="toc__cat" data-action="goto" data-key="cat:${esc(c.name)}" style="--tab:${catColor(c.name)};background:none;border:0;padding:0"><span class="dot"></span>${esc(c.name)}</button></li>
-            ${c.recipes.map((r) => `<li><button class="toc__item" data-action="goto" data-key="r:${r.id}"><span>${esc(r.name)}</span><span class="leader"></span><span class="pg">${pageIndex("r:" + r.id) + 1}</span></button></li>`).join("")}
+            <li><button class="toc__cat" data-action="goto" data-key="cat:${esc(c.name)}" style="${catStyle(c.name)}"><span class="dot"></span>${esc(c.name)}</button></li>
+            ${c.recipes.map((r) => `<li><button class="toc__item" data-action="goto" data-key="r:${r.id}"><span>${esc(r.name)}</span><span class="pg">p. ${pageIndex("r:" + r.id) + 1}</span></button></li>`).join("")}
           `).join("")}</ul>`;
       }
       case "divider":
-        return `<div class="divider-band"></div>
+        return `<span class="divider-tag">${plural(p.recipes.length, "recipe")}</span>
           <h2 class="divider-title">${esc(p.cat)}</h2>
-          <p class="divider-count">${p.recipes.length} recipe${p.recipes.length === 1 ? "" : "s"}</p>
-          <ul class="divider-list">${p.recipes.map((r) => `<li><button data-action="goto" data-key="r:${r.id}"><span>${esc(r.name)}</span><span class="pg">p. ${pageIndex("r:" + r.id) + 1}</span></button></li>`).join("")}</ul>`;
+          <ul class="divider-list">${p.recipes.map((r) => `<li><button data-action="goto" data-key="r:${r.id}"><span>${esc(r.name)}</span>${CHEV}</button></li>`).join("")}</ul>`;
       case "recipe": {
         const r = recipeById(p.id);
         if (!r) return "";
         const s = state.scale[r.id] || 1;
         const meta = [
-          r.serves ? `<span>Serves <b>${Math.round(r.serves * s)}</b></span>` : "",
-          r.prep ? `<span>Prep <b>${r.prep} min</b></span>` : "",
-          r.cook ? `<span>Cook <b>${r.cook} min</b></span>` : "",
+          r.serves ? `<span>${PEOPLE}Serves <b>${Math.round(r.serves * s)}</b></span>` : "",
+          r.prep ? `<span>${CLOCK}Prep <b>${r.prep} min</b></span>` : "",
+          r.cook ? `<span>${CLOCK}Cook <b>${r.cook} min</b></span>` : "",
         ].filter(Boolean).join("");
-        return `<div class="r-head"><div>
+        return `<div class="r-top">
             <span class="r-cat">${esc(r.category)}</span>
-            <h2 class="r-title">${esc(r.name)}</h2>
-            ${r.by ? `<div class="r-by">from ${esc(r.by)}</div>` : ""}
-          </div><button class="r-edit" data-action="edit" data-id="${r.id}" aria-label="Edit recipe">${PENCIL}</button></div>
+            <button class="r-edit" data-action="edit" data-id="${r.id}">${PENCIL}Edit</button>
+          </div>
+          <h2 class="r-title">${esc(r.name)}</h2>
+          ${r.by ? `<div class="r-by">Added by ${esc(r.by)}</div>` : ""}
           ${meta ? `<div class="r-meta">${meta}</div>` : ""}
-          <div class="scaler"><span class="scaler__label">Make</span>
+          <div class="scaler"><span class="scaler__label">Batch size</span>
             <div class="seg" role="group" aria-label="Scale recipe">
               ${[1, 2, 4].map((n) => `<button data-action="scale" data-id="${r.id}" data-s="${n}" class="${n === s ? "is-on" : ""}" aria-pressed="${n === s}">${n}×</button>`).join("")}
             </div></div>
           <h3 class="r-section">Ingredients</h3>
-          ${r.ingredients.length ? `<table class="ing"><tbody>${r.ingredients.map((g) => `<tr><td class="q">${esc(amount(g.qty, g.unit, s))}</td><td>${esc(g.name)}</td></tr>`).join("")}</tbody></table>` : `<p class="hint">No ingredients listed.</p>`}
+          ${r.ingredients.length ? `<ul class="ing">${r.ingredients.map((g) => `<li><span class="q">${esc(amount(g.qty, g.unit, s))}</span><span>${esc(g.name)}</span></li>`).join("")}</ul>` : `<p class="hint">No ingredients listed.</p>`}
           <h3 class="r-section">Method</h3>
           ${r.method.length ? `<ol class="method">${r.method.map((st, n) => `<li>${methodHTML(st, `${r.name} · step ${n + 1}`)}</li>`).join("")}</ol>` : `<p class="hint">No method yet.</p>`}
           ${r.notes ? `<div class="r-notes">${esc(r.notes)}</div>` : ""}`;
       }
       case "end":
-        return `<p class="p-kicker">room for one more…</p>
-          <h2 class="p-title">The next great recipe</h2>
-          ${ORNAMENT}
+        return `<h2 class="p-head">The end… for now</h2>
+          <p>Got another favourite? Add it to the book.</p>
           <button class="btn btn--primary" data-action="add">+ Add a recipe</button>
           <button class="btn" data-action="goto" data-key="contents">Back to contents</button>`;
     }
@@ -189,12 +247,10 @@
     const p = state.pages[i];
     const el = document.createElement("div");
     el.className = `page p-${p.type}`;
-    const color = p.cat ? catColor(p.cat) : "";
-    if (color) el.style.setProperty("--tab", color);
+    if (p.cat) el.setAttribute("style", catStyle(p.cat));
     el.innerHTML = `<div class="page__scroll">${pageHTML(p, i)}</div>
-      ${p.type !== "cover" ? `<div class="page__folio">${i + 1}</div>` : ""}
-      ${i > 0 ? `<button class="dog-ear dog-ear--prev" data-action="prev" aria-label="Previous page"></button>` : ""}
-      ${i < state.pages.length - 1 ? `<button class="dog-ear dog-ear--next" data-action="next" aria-label="Next page"></button>` : ""}`;
+      ${i > 1 ? `<button class="dog-ear dog-ear--prev" data-action="prev" aria-label="Previous page"></button>` : ""}
+      ${i > 0 && i < state.pages.length - 1 ? `<button class="dog-ear dog-ear--next" data-action="next" aria-label="Next page"></button>` : ""}`;
     return el;
   }
 
@@ -214,12 +270,16 @@
   function renderChrome() {
     $("#bookName").textContent = state.name || "Recipe Book";
     document.title = `${state.name || "Recipe Book"} · Recipes`;
-    $("#pageNum").textContent = `${state.cur + 1} / ${state.pages.length}`;
+    $("#pageNum").textContent = `${state.cur + 1} of ${state.pages.length}`;
     $('.pager [data-action="prev"]').disabled = state.cur === 0;
     $('.pager [data-action="next"]').disabled = state.cur >= state.pages.length - 1;
     const cats = categories();
     const curCat = state.pages[state.cur]?.cat;
-    $("#tabs").innerHTML = cats.map((c) => `<button class="tab${c.name === curCat ? " is-active" : ""}" style="--tab:${catColor(c.name)}" data-action="goto" data-key="cat:${esc(c.name)}" title="${esc(c.name)}">${esc(c.name)}</button>`).join("");
+    const html = cats.map((c) => `<button class="cat-chip${c.name === curCat ? " is-active" : ""}" style="${catStyle(c.name)}" data-action="goto" data-key="cat:${esc(c.name)}">${esc(c.name)}<span class="n">${c.recipes.length}</span></button>`).join("");
+    const nav = $("#cats");
+    if (nav.innerHTML !== html) nav.innerHTML = html;
+    nav.hidden = !cats.length;
+    nav.querySelector(".is-active")?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
   }
 
   // ---------- page flipping ----------
@@ -608,7 +668,7 @@
       return esc(name.slice(0, i)) + "<mark>" + esc(name.slice(i, i + term.length)) + "</mark>" + esc(name.slice(i + term.length));
     };
     $("#results").innerHTML = list.length
-      ? list.map((r) => `<li><button data-action="goto" data-key="r:${r.id}" style="--tab:${catColor(r.category)}"><span class="dot"></span><span class="name">${hi(r.name)}</span><span class="cat">${esc(r.category)}</span></button></li>`).join("")
+      ? list.map((r) => `<li><button data-action="goto" data-key="r:${r.id}" style="${catStyle(r.category)}"><span class="name">${hi(r.name)}</span><span class="cat">${esc(r.category)}</span></button></li>`).join("")
       : `<li class="empty">${state.recipes.length ? "No recipe by that name" : "No recipes yet"}</li>`;
   }
   $("#searchInput").addEventListener("input", (e) => renderResults(e.target.value));
@@ -619,10 +679,10 @@
   // Menu
   function openMenu() {
     $("#shareCode").textContent = state.code;
-    $("#whoLabel").textContent = state.who ? `(${state.who})` : "(not set)";
+    $("#whoLabel").textContent = state.who ? `· ${state.who}` : "· not set";
     const others = LS.get("books", []).filter((b) => b.code !== state.code);
     $("#bookList").innerHTML = others.length
-      ? `<p class="menu__label" style="margin-top:8px">Your other books</p>` + others.map((b) => `<button class="menu__item" data-action="switch-book" data-code="${esc(b.code)}"><span>${esc(b.name || b.code)}</span><span class="hint">${esc(b.code)}</span></button>`).join("")
+      ? `<p class="menu__sub">Switch to another book</p>` + others.map((b) => `<button class="menu__item" data-action="switch-book" data-code="${esc(b.code)}"><span>${esc(b.name || b.code)}</span>${CHEV}</button>`).join("")
       : "";
     openSheet("menuSheet");
   }
@@ -634,19 +694,13 @@
 
   // ---------- recipe editor ----------
   let editing = null;
-  function catOptions(selected) {
+  let pickedCat = null;
+  function renderCatPick() {
     const set = new Set([...DEFAULT_CATS, ...state.recipes.map((r) => r.category)]);
-    if (selected) set.add(selected);
-    return [...set].map((c) => `<option ${c === selected ? "selected" : ""}>${esc(c)}</option>`).join("") + `<option value="__new">+ New category…</option>`;
-  }
-  function ingRow(g = {}) {
-    const row = document.createElement("div");
-    row.className = "ing-row";
-    row.innerHTML = `<input class="qty" inputmode="decimal" placeholder="Qty" value="${g.qty ?? ""}" aria-label="Quantity">
-      <select class="unit" aria-label="Unit">${UNITS.map((u) => `<option ${u === (g.unit || "g") ? "selected" : ""}>${u}</option>`).join("")}</select>
-      <input class="nm" placeholder="Ingredient" value="${esc(g.name || "")}" aria-label="Ingredient" maxlength="120">
-      <button type="button" class="x" data-action="remove-ing" aria-label="Remove">×</button>`;
-    return row;
+    if (pickedCat && pickedCat !== "__new") set.add(pickedCat);
+    $("#catPick").innerHTML = [...set].map((c) => `<button type="button" data-action="pick-cat" data-cat="${esc(c)}" style="${catStyle(c)}" class="${c === pickedCat ? "is-on" : ""}">${esc(c)}</button>`).join("")
+      + `<button type="button" class="chip-new${pickedCat === "__new" ? " is-on" : ""}" data-action="pick-cat" data-cat="__new">+ New</button>`;
+    $("#newCatInput").hidden = pickedCat !== "__new";
   }
   function openEditor(recipe) {
     editing = recipe || null;
@@ -655,40 +709,28 @@
     $("#editTitle").textContent = recipe ? "Edit recipe" : "New recipe";
     $("#deleteBtn").hidden = !recipe;
     const curCat = state.pages[state.cur]?.cat;
-    const cat = recipe?.category || curCat || DEFAULT_CATS[1];
-    $("#categorySelect").innerHTML = catOptions(cat);
-    $("#newCatWrap").hidden = true;
+    pickedCat = recipe?.category || curCat || DEFAULT_CATS[1];
+    renderCatPick();
     f.name.value = recipe?.name || "";
     f.serves.value = recipe?.serves ?? "";
     f.prep.value = recipe?.prep ?? "";
     f.cook.value = recipe?.cook ?? "";
+    f.ingredients.value = (recipe?.ingredients || []).map(formatIngredient).join("\n");
     f.method.value = (recipe?.method || []).join("\n");
     f.notes.value = recipe?.notes || "";
-    const rows = $("#ingRows");
-    rows.innerHTML = "";
-    const ings = recipe?.ingredients?.length ? recipe.ingredients : [{}, {}, {}];
-    ings.forEach((g) => rows.append(ingRow(g)));
     openSheet("editSheet");
     $("#editSheet").scrollTop = 0;
+    if (!recipe) setTimeout(() => f.name.focus(), 300);
   }
-  $("#categorySelect").addEventListener("change", (e) => {
-    const isNew = e.target.value === "__new";
-    $("#newCatWrap").hidden = !isNew;
-    if (isNew) setTimeout(() => $("#editForm").newCategory.focus(), 30);
-  });
 
   $("#editForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = e.currentTarget;
-    let category = f.category.value;
+    let category = pickedCat;
     if (category === "__new") category = f.newCategory.value.trim();
     if (!category) { toast("Give the new category a name"); return; }
     const numOrNull = (v) => (v === "" || v == null ? null : Math.max(0, parseFloat(String(v).replace(",", "."))) || null);
-    const ingredients = $$(".ing-row", f).map((row) => ({
-      qty: numOrNull(row.querySelector(".qty").value),
-      unit: row.querySelector(".unit").value,
-      name: row.querySelector(".nm").value.trim(),
-    })).filter((g) => g.name);
+    const ingredients = f.ingredients.value.split("\n").map(parseIngredient).filter((g) => g && g.name);
     const recipe = {
       id: editing?.id || (f.name.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 30) || "recipe") + "-" + uid().slice(0, 5),
       name: f.name.value.trim(),
@@ -832,12 +874,12 @@
       if (!t.done) li.querySelector(".timer-item__time").textContent = fmt(tLeft(t));
       li.querySelector(".timer-bar i").style.width = `${t.done ? 100 : (1 - tLeft(t) / t.total) * 100}%`;
     }
-    const pill = $("#timerPill");
+    const pill = $("#timerBtn");
     const done = timers.find((t) => t.done);
     const running = timers.filter((t) => t.end).sort((a, b) => a.end - b.end);
     pill.classList.toggle("is-done", !!done);
     pill.classList.toggle("is-running", !done && running.length > 0);
-    $("#timerPillText").textContent = done ? "Done!" : running.length ? fmt(tLeft(running[0])) + (running.length > 1 ? ` +${running.length - 1}` : "") : timers.length ? "Paused" : "Timer";
+    $("#timerBtnText").textContent = done ? "Done!" : running.length ? fmt(tLeft(running[0])) + (running.length > 1 ? ` +${running.length - 1}` : "") : timers.length ? "Paused" : "Timer";
   }
   setInterval(() => {
     let changed = false;
@@ -881,8 +923,19 @@
       }
       case "edit": openEditor(recipeById(el.dataset.id)); break;
       case "delete": deleteRecipe(); break;
-      case "add-ing": { const r = ingRow(); $("#ingRows").append(r); r.querySelector(".qty").focus(); break; }
-      case "remove-ing": el.closest(".ing-row").remove(); break;
+      case "pick-cat":
+        pickedCat = el.dataset.cat;
+        renderCatPick();
+        if (pickedCat === "__new") setTimeout(() => $("#newCatInput").focus(), 30);
+        break;
+      case "welcome-tab": {
+        const join = el.dataset.tab === "join";
+        $$('[data-action="welcome-tab"]').forEach((b) => b.classList.toggle("is-on", b === el));
+        $("#createForm").hidden = join;
+        $("#joinForm").hidden = !join;
+        $("#welcomeError").textContent = "";
+        break;
+      }
       case "share": {
         const text = `Join our recipe book “${state.name}” — open the link, or enter code ${state.code}`;
         if (navigator.share) navigator.share({ title: state.name, text, url: inviteLink() }).catch(() => {});
@@ -969,6 +1022,7 @@
     if (invite === current) openBook(invite);
     else {
       showWelcome();
+      $('[data-action="welcome-tab"][data-tab="join"]').click();
       $("#joinForm").code.value = invite;
       joinBook(invite);
     }

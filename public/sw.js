@@ -1,6 +1,6 @@
 // Network-first service worker: always tries for fresh files, falls back to the
 // cached copy when offline. The /api sync calls are never cached.
-const CACHE = "recipe-book-v1";
+const CACHE = "recipe-book-v2";
 const CORE = ["/", "/styles.css", "/app.js", "/manifest.webmanifest", "/icons/icon.svg", "/icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {

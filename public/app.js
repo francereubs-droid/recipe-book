@@ -368,6 +368,17 @@
     }
     flipping = false;
   }
+  // Tapping a recipe, category, contents or search result jumps straight there.
+  function jumpTo(target) {
+    target = clamp(target, 0, state.pages.length - 1);
+    if (flipping || target === state.cur) return;
+    state.cur = target;
+    renderCurrent();
+    if (!reduceMotion) {
+      currentEl.classList.add("page--arrive");
+      currentEl.addEventListener("animationend", () => currentEl.classList.remove("page--arrive"), { once: true });
+    }
+  }
   const next = () => flipTo(state.cur + 1);
   const prev = () => flipTo(state.cur - 1);
 
@@ -749,7 +760,7 @@
     closeSheets();
     buildPages();
     renderCurrent(true);
-    setTimeout(() => flipTo(pageIndex("r:" + recipe.id)), 250);
+    setTimeout(() => jumpTo(pageIndex("r:" + recipe.id)), 200);
     try {
       const d = await write({ action: "save", recipe });
       state.version = null; // pull the canonical copy (and anything others changed)
@@ -911,7 +922,8 @@
         if (i < 0) break;
         const fromSheet = !!el.closest(".sheet");
         closeSheets();
-        setTimeout(() => flipTo(i), fromSheet ? 180 : 0);
+        if (fromSheet) setTimeout(() => jumpTo(i), 120);
+        else jumpTo(i);
         break;
       }
       case "scale": {

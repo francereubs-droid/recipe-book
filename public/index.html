@@ -136,15 +136,8 @@
         <label>Cook (min)<input name="cook" type="number" inputmode="numeric" min="0" step="1" placeholder="30"></label>
       </div>
 
-      <label>Ingredients
-        <span class="hint">One per line, amount first — e.g. <b>200 g flour</b>, <b>2 eggs</b>, <b>1 tsp salt</b></span>
-        <textarea name="ingredients" rows="7" placeholder="250 g plain flour&#10;2 tsp baking powder&#10;2 eggs&#10;300 ml milk&#10;salt, to taste"></textarea>
-      </label>
-
-      <label>Method
-        <span class="hint">One step per line. Times like “25 min” become tap-to-start timers.</span>
-        <textarea name="method" rows="7" placeholder="Preheat the oven to 180°C.&#10;Mix the dry ingredients.&#10;Bake for 25 min until golden."></textarea>
-      </label>
+      <div id="parts" class="parts"></div>
+      <button type="button" class="btn add-part" data-action="add-part">+ Add another part <span class="hint">(e.g. icing, sauce)</span></button>
 
       <label>Notes <span class="hint">(optional)</span><textarea name="notes" rows="2" maxlength="2000" placeholder="Tips, where it came from…"></textarea></label>
 

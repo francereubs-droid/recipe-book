@@ -70,21 +70,27 @@
     if (!whole) return best[1] || "0";
     return `${whole}${best[1]}`;
   }
-  function amount(qty, unit, s) {
+  function fmtQty(q, u) {
+    if (["tsp", "tbsp", "cup", "whole", "pinch", ""].includes(u)) return fraction(q);
+    if (u === "g" || u === "ml") return q >= 10 ? String(Math.round(q)) : trim0(q.toFixed(1));
+    return trim0(q >= 100 ? q.toFixed(0) : q >= 10 ? q.toFixed(1) : q.toFixed(2));
+  }
+  // amount(1, "tbsp", 2, 2) -> "2–4 tbsp"
+  function amount(qty, unit, s, qtyMax) {
     if (unit === "to taste") return "to taste";
     if (qty == null || qty === "") return unit && unit !== "whole" ? unit : "";
-    let q = qty * s;
+    let lo = qty * s;
+    let hi = qtyMax != null && qtyMax > qty ? qtyMax * s : null;
     let u = unit || "";
-    if (u === "g" && q >= 1000) { q /= 1000; u = "kg"; }
-    else if (u === "kg" && q < 1) { q *= 1000; u = "g"; }
-    else if (u === "ml" && q >= 1000) { q /= 1000; u = "L"; }
-    else if (u === "L" && q < 1) { q *= 1000; u = "ml"; }
-    let str;
-    if (["tsp", "tbsp", "cup", "whole", "pinch", ""].includes(u)) str = fraction(q);
-    else if (u === "g" || u === "ml") str = q >= 10 ? String(Math.round(q)) : trim0(q.toFixed(1));
-    else str = trim0(q >= 100 ? q.toFixed(0) : q >= 10 ? q.toFixed(1) : q.toFixed(2));
-    if (u === "pinch" && q > 1) u = "pinches";
-    if (u === "cup" && q > 1) u = "cups";
+    const top = hi ?? lo;
+    const conv = (f, nu) => { lo *= f; if (hi != null) hi *= f; u = nu; };
+    if (u === "g" && top >= 1000) conv(1 / 1000, "kg");
+    else if (u === "kg" && top < 1) conv(1000, "g");
+    else if (u === "ml" && top >= 1000) conv(1 / 1000, "L");
+    else if (u === "L" && top < 1) conv(1000, "ml");
+    const str = fmtQty(lo, u) + (hi != null ? "–" + fmtQty(hi, u) : "");
+    if (u === "pinch" && (hi ?? lo) > 1) u = "pinches";
+    if (u === "cup" && (hi ?? lo) > 1) u = "cups";
     return u && u !== "whole" ? `${str} ${u}` : str;
   }
 
@@ -113,25 +119,32 @@
     if (!text) return null;
     const taste = text.match(/^(.*?)[,\s]+to taste$/i);
     if (taste) return { qty: null, unit: "to taste", name: taste[1].trim() };
-    const m = text.match(/^((?:\d+\s+)?\d+\/\d+|\d*\s*[¼½¾⅓⅔⅛]|\d+(?:[.,]\d+)?)\s*(.*)$/);
+    const NUM = "(?:\\d+\\s+\\d+\\/\\d+|\\d+\\/\\d+|\\d*\\s*[¼½¾⅓⅔⅛]|\\d+(?:[.,]\\d+)?)";
+    // "1-2 tbsp cornflour", "1 – 2 tbsp", "1 to 2 tbsp", "½-1 tsp"
+    const m = text.match(new RegExp(`^(${NUM})(?:\\s*(?:-|–|—|to)\\s*(${NUM}))?\\s*(.*)$`, "i"));
     if (!m) {
       const p = text.match(/^(?:a\s+)?pinch(?:\s+of)?\s+(.+)$/i);
       return p ? { qty: 1, unit: "pinch", name: p[1] } : { qty: null, unit: "whole", name: text };
     }
     const qty = parseQty(m[1]);
-    let rest = m[2];
+    let qtyMax = m[2] ? parseQty(m[2]) : null;
+    if (qtyMax != null && !(qtyMax > qty)) qtyMax = null;
+    let rest = m[3];
     const um = rest.match(/^([a-zA-Z]+)\.?(?:\s+of)?\s+(.+)$/) || rest.match(/^([a-zA-Z]+)$/);
     let unit = "whole";
     if (um && UNIT_ALIASES[um[1].toLowerCase()]) {
       unit = UNIT_ALIASES[um[1].toLowerCase()];
       rest = um[2] || "";
     }
-    return { qty, unit, name: rest.trim() || text };
+    const g = { qty, unit, name: rest.trim() || text };
+    if (qtyMax != null) g.qtyMax = qtyMax;
+    return g;
   }
   function formatIngredient(g) {
     if (g.unit === "to taste") return `${g.name}, to taste`;
     if (g.qty == null) return g.name;
-    const q = trim0(String(Math.round(g.qty * 1000) / 1000));
+    const n = (v) => trim0(String(Math.round(v * 1000) / 1000));
+    const q = n(g.qty) + (g.qtyMax != null && g.qtyMax > g.qty ? "-" + n(g.qtyMax) : "");
     return g.unit && g.unit !== "whole" ? `${q} ${g.unit} ${g.name}` : `${q} ${g.name}`;
   }
 
@@ -179,6 +192,13 @@
   }
   const pageIndex = (key) => state.pages.findIndex((p) => p.key === key);
   const recipeById = (id) => state.recipes.find((r) => r.id === id);
+
+  // A recipe is made of one or more parts (e.g. "Cake" and "Icing"),
+  // each with its own ingredients and method. Older recipes have just one.
+  function recipeParts(r) {
+    if (Array.isArray(r.parts) && r.parts.length) return r.parts;
+    return [{ title: "", ingredients: r.ingredients || [], method: r.method || [] }];
+  }
 
   const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
@@ -228,10 +248,21 @@
             <div class="seg" role="group" aria-label="Scale recipe">
               ${[1, 2, 4].map((n) => `<button data-action="scale" data-id="${r.id}" data-s="${n}" class="${n === s ? "is-on" : ""}" aria-pressed="${n === s}">${n}×</button>`).join("")}
             </div></div>
-          <h3 class="r-section">Ingredients</h3>
-          ${r.ingredients.length ? `<ul class="ing">${r.ingredients.map((g) => `<li><span class="q">${esc(amount(g.qty, g.unit, s))}</span><span>${esc(g.name)}</span></li>`).join("")}</ul>` : `<p class="hint">No ingredients listed.</p>`}
-          <h3 class="r-section">Method</h3>
-          ${r.method.length ? `<ol class="method">${r.method.map((st, n) => `<li>${methodHTML(st, `${r.name} · step ${n + 1}`)}</li>`).join("")}</ol>` : `<p class="hint">No method yet.</p>`}
+          ${(() => {
+            const parts = recipeParts(r);
+            const multi = parts.length > 1;
+            return parts.map((pt, pi) => {
+              const title = pt.title || (multi ? `Part ${pi + 1}` : "");
+              const ing = pt.ingredients || [], meth = pt.method || [];
+              return `<section class="r-part${title ? " r-part--titled" : ""}">
+                ${title ? `<h3 class="r-part__title">${esc(title)}</h3>` : ""}
+                <h4 class="r-section">Ingredients</h4>
+                ${ing.length ? `<ul class="ing">${ing.map((g) => `<li><span class="q">${esc(amount(g.qty, g.unit, s, g.qtyMax))}</span><span>${esc(g.name)}</span></li>`).join("")}</ul>` : `<p class="hint">No ingredients listed.</p>`}
+                <h4 class="r-section">Method</h4>
+                ${meth.length ? `<ol class="method">${meth.map((st, n) => `<li>${methodHTML(st, `${r.name}${title ? " · " + title : ""} · step ${n + 1}`)}</li>`).join("")}</ol>` : `<p class="hint">No method yet.</p>`}
+              </section>`;
+            }).join("");
+          })()}
           ${r.notes ? `<div class="r-notes">${esc(r.notes)}</div>` : ""}`;
       }
       case "end":
@@ -713,6 +744,36 @@
       + `<button type="button" class="chip-new${pickedCat === "__new" ? " is-on" : ""}" data-action="pick-cat" data-cat="__new">+ New</button>`;
     $("#newCatInput").hidden = pickedCat !== "__new";
   }
+  function addPartEditor(pt = {}) {
+    const wrap = $("#parts");
+    const el = document.createElement("fieldset");
+    el.className = "part";
+    el.innerHTML = `<div class="part__head">
+        <span class="part__num"></span>
+        <input class="part__title" maxlength="60" placeholder="Part name (optional)" value="${esc(pt.title || "")}">
+        <button type="button" class="part__remove" data-action="remove-part" aria-label="Remove this part">Remove</button>
+      </div>
+      <label>Ingredients
+        <span class="hint">One per line, amount first — e.g. <b>200 g flour</b>, <b>2 eggs</b>, <b>1-2 tbsp cornflour</b></span>
+        <textarea class="part__ing" rows="6" placeholder="250 g plain flour&#10;2 tsp baking powder&#10;2 eggs&#10;1-2 tbsp milk&#10;salt, to taste">${esc((pt.ingredients || []).map(formatIngredient).join("\n"))}</textarea>
+      </label>
+      <label>Method
+        <span class="hint">One step per line. Times like “25 min” become tap-to-start timers.</span>
+        <textarea class="part__method" rows="6" placeholder="Preheat the oven to 180°C.&#10;Mix the dry ingredients.&#10;Bake for 25 min until golden.">${esc((pt.method || []).join("\n"))}</textarea>
+      </label>`;
+    wrap.append(el);
+    renumberParts();
+    return el;
+  }
+  function renumberParts() {
+    const parts = $$("#parts .part");
+    const multi = parts.length > 1;
+    parts.forEach((el, i) => {
+      el.querySelector(".part__num").textContent = multi ? `Part ${i + 1}` : "";
+      el.querySelector(".part__head").classList.toggle("is-single", !multi);
+      el.querySelector(".part__title").placeholder = multi ? (i === 0 ? "Name, e.g. Cake" : "Name, e.g. Icing") : "Part name (optional)";
+    });
+  }
   function openEditor(recipe) {
     editing = recipe || null;
     const f = $("#editForm");
@@ -726,8 +787,8 @@
     f.serves.value = recipe?.serves ?? "";
     f.prep.value = recipe?.prep ?? "";
     f.cook.value = recipe?.cook ?? "";
-    f.ingredients.value = (recipe?.ingredients || []).map(formatIngredient).join("\n");
-    f.method.value = (recipe?.method || []).join("\n");
+    $("#parts").innerHTML = "";
+    (recipe ? recipeParts(recipe) : [{ title: "", ingredients: [], method: [] }]).forEach(addPartEditor);
     f.notes.value = recipe?.notes || "";
     openSheet("editSheet");
     $("#editSheet").scrollTop = 0;
@@ -741,7 +802,12 @@
     if (category === "__new") category = f.newCategory.value.trim();
     if (!category) { toast("Give the new category a name"); return; }
     const numOrNull = (v) => (v === "" || v == null ? null : Math.max(0, parseFloat(String(v).replace(",", "."))) || null);
-    const ingredients = f.ingredients.value.split("\n").map(parseIngredient).filter((g) => g && g.name);
+    let parts = $$("#parts .part", f).map((el) => ({
+      title: el.querySelector(".part__title").value.trim(),
+      ingredients: el.querySelector(".part__ing").value.split("\n").map(parseIngredient).filter((g) => g && g.name),
+      method: el.querySelector(".part__method").value.split("\n").map((x) => x.trim()).filter(Boolean),
+    })).filter((pt) => pt.title || pt.ingredients.length || pt.method.length);
+    if (!parts.length) parts = [{ title: "", ingredients: [], method: [] }];
     const recipe = {
       id: editing?.id || (f.name.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 30) || "recipe") + "-" + uid().slice(0, 5),
       name: f.name.value.trim(),
@@ -749,8 +815,9 @@
       serves: numOrNull(f.serves.value),
       prep: numOrNull(f.prep.value),
       cook: numOrNull(f.cook.value),
-      ingredients,
-      method: f.method.value.split("\n").map((s) => s.trim()).filter(Boolean),
+      parts,
+      ingredients: parts.flatMap((pt) => pt.ingredients),
+      method: parts.flatMap((pt) => pt.method),
       notes: f.notes.value.trim(),
       by: editing?.by || state.who,
     };
@@ -935,6 +1002,20 @@
       }
       case "edit": openEditor(recipeById(el.dataset.id)); break;
       case "delete": deleteRecipe(); break;
+      case "add-part": {
+        const el = addPartEditor({});
+        setTimeout(() => { el.scrollIntoView({ behavior: "smooth", block: "start" }); el.querySelector(".part__title").focus(); }, 30);
+        break;
+      }
+      case "remove-part": {
+        const part = el.closest(".part");
+        if ($$("#parts .part").length <= 1) break;
+        const hasText = [...part.querySelectorAll("input, textarea")].some((x) => x.value.trim());
+        if (hasText && !confirm("Remove this part and everything in it?")) break;
+        part.remove();
+        renumberParts();
+        break;
+      }
       case "pick-cat":
         pickedCat = el.dataset.cat;
         renderCatPick();

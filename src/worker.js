@@ -34,8 +34,26 @@ const num = (v) => {
   return v !== null && v !== "" && Number.isFinite(n) && n >= 0 ? Math.min(n, 100000) : null;
 };
 
+function cleanIngredients(list) {
+  return (Array.isArray(list) ? list : []).slice(0, 80).map((i) => {
+    const g = { qty: num(i?.qty), unit: clip(i?.unit, 12), name: clip(i?.name, 120) };
+    const max = num(i?.qtyMax);
+    if (max != null && g.qty != null && max > g.qty) g.qtyMax = max;
+    return g;
+  }).filter((i) => i.name.trim());
+}
+const cleanMethod = (list) =>
+  (Array.isArray(list) ? list : []).slice(0, 60).map((s) => clip(s, 1500)).filter((s) => s.trim());
+
 function cleanRecipe(r) {
   if (!r || typeof r !== "object" || !ID_RE.test(r.id || "")) return null;
+  // A recipe can have several parts (e.g. "Cake" and "Icing"), each with its
+  // own ingredients and method. The flat ingredients/method lists are kept too.
+  let parts = (Array.isArray(r.parts) ? r.parts : []).slice(0, 8).map((p) => ({
+    title: clip(p?.title, 60).trim(),
+    ingredients: cleanIngredients(p?.ingredients),
+    method: cleanMethod(p?.method),
+  })).filter((p) => p.title || p.ingredients.length || p.method.length);
   const recipe = {
     id: r.id,
     name: clip(r.name, 120).trim(),
@@ -44,15 +62,12 @@ function cleanRecipe(r) {
     prep: num(r.prep),
     cook: num(r.cook),
     notes: clip(r.notes, 2000),
-    ingredients: (Array.isArray(r.ingredients) ? r.ingredients : []).slice(0, 80).map((i) => ({
-      qty: num(i?.qty),
-      unit: clip(i?.unit, 12),
-      name: clip(i?.name, 120),
-    })).filter((i) => i.name.trim()),
-    method: (Array.isArray(r.method) ? r.method : []).slice(0, 60).map((s) => clip(s, 1500)).filter((s) => s.trim()),
+    ingredients: parts.length ? parts.flatMap((p) => p.ingredients) : cleanIngredients(r.ingredients),
+    method: parts.length ? parts.flatMap((p) => p.method) : cleanMethod(r.method),
     by: clip(r.by, 40),
     updated: Date.now(),
   };
+  if (parts.length > 1 || parts.some((p) => p.title)) recipe.parts = parts;
   if (!recipe.name) return null;
   if (JSON.stringify(recipe).length > MAX_RECIPE_BYTES) return null;
   return recipe;
